@@ -4,22 +4,23 @@ import signal
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.models import Model
-from keras.layers import Dense, GlobalAveragePooling2D
-from se_resnet import SEResNet50
+from keras.layers import Dense, Flatten
+from nets.se_resnet import SEResNet50
 
-from dataset import *
+from datasets.skoda_dataset import *
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 nb_classes = len(classes)
 
-input_shape = (1000, 600, 3)
+input_shape = (600, 400, 3)
 
 model_name = "seresnet50"
 
 net_model = SEResNet50(input_shape=input_shape, include_top=False, weights='imagenet', pooling='avg')
 # append classification layer
 x = net_model.output
+x = Flatten()(x)
 final_output = Dense(nb_classes, activation='sigmoid', name='fc11')(x)
 
 model = Model(inputs=net_model.input, outputs=final_output)
@@ -27,7 +28,7 @@ model.summary()
 
 model.compile(loss='binary_crossentropy', optimizer='adam')
 
-batch_size = 5
+batch_size = 4
 nb_epoch = 100
 
 train = read_sets_file(imagesets_folder, "train")
@@ -41,8 +42,7 @@ if not os.path.exists(output_dir):
 # callbacks
 checkpointer = ModelCheckpoint(
 		filepath=os.path.join(output_dir, model_name + '.hdf5'),
-		save_best_only=True)
-
+		monitor='val_loss', verbose=1, save_best_only=True)
 
 lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.1, cooldown=0, patience=20, min_lr=0.5e-6)
 

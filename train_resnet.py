@@ -2,12 +2,12 @@ from __future__ import division
 
 import signal
 
-from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.applications.resnet50 import ResNet50
 from keras.models import Model
 from keras.layers import Dense, Flatten
 
-from dataset import *
+from datasets.skoda_dataset import *
 
 # TODO: Add dataset normalization
 
@@ -17,7 +17,7 @@ model_name = 'res_net50'
 
 nb_classes = len(classes)
 
-input_shape = (1000, 600, 3)
+input_shape = (600, 400, 3)
 
 net_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
 
@@ -45,7 +45,9 @@ if not os.path.exists(output_dir):
 # callbacks
 checkpointer = ModelCheckpoint(
 		filepath=os.path.join(output_dir, model_name + '.hdf5'),
-		save_best_only=True)
+		monitor='val_loss', verbose=1, save_best_only=True)
+
+lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.1, cooldown=0, patience=20, min_lr=0.5e-6)
 
 # early_stop = EarlyStopping(patience=5)
 tensorboard = TensorBoard()
@@ -60,7 +62,7 @@ model.fit_generator(
 		DataGenerator(img_folder=image_folder, annot_folder=annotation_folder, filenames=test, classes=classes,
 		              input_shape=input_shape, batch_size=batch_size),
 		validation_steps=len(test)/batch_size,
-		callbacks=[checkpointer, tensorboard],
+		callbacks=[checkpointer, tensorboard, lr_reducer],
 		pickle_safe=True,
 		verbose=1
 )

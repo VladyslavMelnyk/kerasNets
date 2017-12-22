@@ -29,7 +29,7 @@ from keras.applications.resnet50 import preprocess_input
 from keras.applications.imagenet_utils import decode_predictions
 from keras import backend as K
 
-from se import squeeze_excite_block
+from nets.se import squeeze_excite_block
 
 __all__ = ['SEResNet', 'SEResNet50', 'SEResNet101', 'SEResNet154', 'preprocess_input', 'decode_predictions']
 
