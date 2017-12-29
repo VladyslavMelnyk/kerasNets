@@ -18,25 +18,9 @@ model_location = os.path.join("models", "res_net50.hdf5")
 
 out_dir = "./outdir"
 
-model_name = 'res_net50'
-
 nb_classes = len(classes)
 
-input_shape = (600, 400, 3)
-
-net_model = ResNet50(include_top=False, input_shape=input_shape)
-
-# append classification layer
-x = net_model.output
-x = Flatten()(x)
-final_output = Dense(nb_classes, activation='sigmoid', name='fc11')(x)
-model = Model(inputs=net_model.input, outputs=final_output)
-
-if not os.path.exists(out_dir):
-    os.mkdir(out_dir)
-
-model.load_weights(model_location)
-model.compile(loss='binary_crossentropy', optimizer='adam')
+model = load_model(model_location)
 
 batch_size = 1
 
@@ -64,7 +48,11 @@ thresholds_array = np.arange(0, 1, th_step)
 # print "Validation loss: {0}".format(out)
 
 val_output = os.path.join(out_dir, "results_val.p")
+if os.path.exists(val_output):
+    os.remove(val_output)
 val_pred = os.path.join(out_dir, "val.txt")
+if os.path.exists(val_pred):
+    os.remove(val_pred)
 
 model_evaluation(model,
                  DataGenerator(img_folder=train_val_image_folder, annot_folder=train_val_annotation_folder,
@@ -80,7 +68,11 @@ model_evaluation(model,
 # print "Test loss: {0}".format(out)
 
 test_output = os.path.join(out_dir, "results_test.p")
+if os.path.exists(test_output):
+    os.remove(test_output)
 test_pred = os.path.join(out_dir, "test.txt")
+if os.path.exists(test_pred):
+    os.remove(test_pred)
 
 model_evaluation(model,
                  DataGenerator(img_folder=test_image_folder, annot_folder=test_annotation_folder,
