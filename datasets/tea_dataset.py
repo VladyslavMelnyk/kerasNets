@@ -2,17 +2,18 @@ from utils import *
 
 root_folder = parent_directory(__file__, level=1)
 
-# dataset_folder = os.path.join(root_folder, "deformable_rfcn", "Deformable-ConvNets", "data", "skoda", "train")
+train_folder = os.path.join("/data", "rfcn-object-detection", "data", "tea_cartons1", "train")
+test_folder = os.path.join("/data", "rfcn-object-detection", "data", "tea_cartons1", "test")
 
-dataset_folder = os.path.join("/data", "rfcn-object-detection", "data", "tea_cartons1")
+tr_imagesets_folder = os.path.join(train_folder, "ImageSets")
+tr_image_folder = os.path.join(train_folder, "JPEGImages")
+tr_annotation_folder = os.path.join(train_folder, "Annotations")
 
-# dataset_folder = os.path.join(root_folder, "datasets", "skoda", "processed")
+ts_imagesets_folder = os.path.join(test_folder, "ImageSets")
+ts_image_folder = os.path.join(test_folder, "JPEGImages")
+ts_annotation_folder = os.path.join(test_folder, "Annotations")
 
-imagesets_folder = os.path.join(dataset_folder, "ImageSets")
-
-image_folder = os.path.join(dataset_folder, "JPEGImages")
-
-annotation_folder = os.path.join(dataset_folder, "Annotations")
-
+train = read_sets_file(tr_imagesets_folder, "train")
+validation = read_sets_file(ts_imagesets_folder, "test")
 
 classes = ['tea_carton1', 'tea_carton2', 'tea_carton3', 'tea_carton4', 'tea_carton5', 'tea_carton6', 'tea_carton7', 'tea_carton8', 'tea_carton9', 'tea_carton10']
