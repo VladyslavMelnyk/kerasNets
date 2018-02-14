@@ -9,13 +9,16 @@ from keras.layers import Dense
 from nets.densenet import DenseNetImageNet169
 from datasets.tea_dataset import *
 
+#set_fraction_of_gpu_memory(0.85)
+#switch_to_cpu()
+
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 nb_classes = len(classes)
 
 input_shape = (224, 224, 3)
 
-model_name = "densenet_tea_fixed"
+model_name = "densenet_tea_fixed1"
 
 net_model = DenseNetImageNet169(input_shape=input_shape, include_top=False, weights='imagenet')
 # append classification layer
@@ -31,10 +34,10 @@ model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']
 model.load_weights('/data/kerasNets/models/densenet_tea_fixed.hdf5')
 
 # use for training specific layers
-for layer in model.layers[:-2]:
-	layer.trainable = False
+#for layer in model.layers[:-1]:
+#	layer.trainable = False
 
-batch_size = 20
+batch_size = 30
 nb_epoch = 300
 
 train = read_sets_file(tr_imagesets_folder, "train")
@@ -49,7 +52,7 @@ if not os.path.exists(output_dir):
 checkpointer = ModelCheckpoint(filepath=os.path.join(output_dir, model_name + '.hdf5'),
 		save_best_only=True, verbose=1)
 
-lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.1, cooldown=0, patience=10, min_lr=0.5e-6)
+lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.2, cooldown=5, patience=2, min_lr=0.5e-6)
 
 tensorboard = TensorBoard()
 

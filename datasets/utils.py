@@ -376,10 +376,10 @@ class DataGenerator(Iterator):
         with self.lock:
             index_array, _, current_batch_size = next(self.index_generator)
 
-        batch_x = np.zeros((current_batch_size,) + self.input_shape)
-        batch_y = np.zeros((current_batch_size, len(self.classes))) if self.category_repr else [0] * current_batch_size
-        x = np.zeros((current_batch_size,) + self.input_shape)
-        y = np.zeros((current_batch_size, len(self.classes))) if self.category_repr else [0] * current_batch_size
+        batch_x = np.zeros((max(current_batch_size, self.n_per_image),) + self.input_shape)
+        batch_y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
+        x = np.zeros((max(current_batch_size, self.n_per_image),) + self.input_shape)
+        y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
 
         for i, j in enumerate(index_array):
             if self.prep == 'color':
@@ -394,10 +394,11 @@ class DataGenerator(Iterator):
             labels = process_annotation(os.path.join(self.annot_folder, self.filenames[int(j)] + ".xml"))
             batch_y[i] = to_categorical(labels, self.classes) if self.category_repr else set(labels)
             if self.data_gen is not None:
-                for num in range(self.n_per_image):
+                for num in xrange(self.n_per_image):
                     x[num] = next(self.data_gen.flow(batch_x[i].reshape((1,) + batch_x[i].shape)))[0].astype(np.uint8)
                     y[num] = batch_y[i]
-        np.concatenate((x, batch_x),axis=1)
-        np.concatenate((y, batch_y),axis=1)
+        if self.data_gen is not None:
+            np.concatenate((batch_x, x),axis=1)
+            np.concatenate((batch_y, y),axis=1)
 
-        return np.array(x, dtype=np.float64), np.array(y)
+        return np.array(batch_x, dtype=np.float64), batch_y

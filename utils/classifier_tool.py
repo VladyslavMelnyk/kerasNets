@@ -11,6 +11,8 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, History, ReduceLROnPla
 from keras.preprocessing.image import ImageDataGenerator
 from keras.engine import Model
 from keras.layers import Dense, Flatten
+from keras import backend as K
+from sklearn.model_selection import train_test_split
 
 def preprocess_fc(img, rescale=1. / 255, input_shape=None):
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -148,16 +150,13 @@ def create_image_lists(all_images, val_pts=0.2):
     """
     train_images = []
     val_images = []
-    i=1
-    length = len(all_images)
-    n = length / (length * val_pts)
-    all_images = random.sample(all_images, length)
-    for img in all_images:
-        if int(i % n)==0:
-            val_images.append((img[0], img[1]))
-        else:
-            train_images.append((img[0], img[1]))
-        i+=1
+    X = [i[0] for i in all_images]
+    y = [i[1] for i in all_images]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=val_pts)
+    for idx in range(len(X_train)):
+        train_images.append((X_train[idx],y_train[idx]))
+    for idx in range(len(X_test)):
+        val_images.append((X_test[idx],y_test[idx]))
     print "Train set size = {} images".format(len(train_images))
     print "Validation set size = {} images".format(len(val_images))
     print "Finished processing all images"
