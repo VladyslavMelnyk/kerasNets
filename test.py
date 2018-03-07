@@ -12,7 +12,7 @@ np.set_printoptions(precision=5, suppress=True)
 
 #switch_to_cpu()
 
-model_location = os.path.join("models", "densenet_tea_fixed.hdf5")
+model_location = os.path.join("models", "densenet_tea_color_paste.hdf5")
 # model_location = os.path.join("models", "dense_net_169_original_retrain.hdf5")
 # model2_location = os.path.join("models", "dense_net_169_original.hdf5")
 
@@ -24,28 +24,10 @@ model = load_model(model_location)
 
 batch_size = 1
 
-input_shape = (224, 224, 3)
+input_shape = (300, 500, 3)
 
-th_step = 0.05
+th_step = 0.25
 thresholds_array = np.arange(0, 1, th_step)
-
-# val_aug = ImageDataGenerator()
-#
-# val_flow = PASCALVOCIterator(directory=root_folder, target_file="test.txt",
-#                              image_data_generator=val_aug, target_size=(input_shape[0], input_shape[1]),
-#                              batch_size=batch_size, classes=classes)
-#
-# test_flow = PASCALVOCIterator(directory=test_folder, target_file="test.txt",
-#                              image_data_generator=val_aug, target_size=(input_shape[0], input_shape[1]),
-#                              batch_size=batch_size, classes=classes)
-
-
-# out = model.evaluate_generator(
-#     val_flow,
-#     steps=1000
-# )
-#
-# print "Validation loss: {0}".format(out)
 
 val_output = os.path.join(out_dir, "results_val.p")
 if os.path.exists(val_output):
@@ -57,15 +39,8 @@ if os.path.exists(val_pred):
 model_evaluation(model,
                  DataGenerator(img_folder=ts_image_folder, annot_folder=ts_annotation_folder,
                                filenames=validation, classes=classes, input_shape=input_shape, batch_size=batch_size,
-                               category_repr=False),
+                               category_repr=False, mode="color", box_folder=box_annotation_folder_ts),
                  thresholds_array, classes, validation, batch_size, val_output, val_pred)
-
-# out = model.evaluate_generator(
-#     test_flow,
-#
-# )
-#
-# print "Test loss: {0}".format(out)
 
 test_output = os.path.join(out_dir, "results_train.p")
 if os.path.exists(test_output):
@@ -77,5 +52,5 @@ if os.path.exists(test_pred):
 model_evaluation(model,
                  DataGenerator(img_folder=tr_image_folder, annot_folder=tr_annotation_folder,
                                filenames=train, classes=classes, input_shape=input_shape, batch_size=batch_size,
-                               category_repr=False),
+                               category_repr=False, mode="color_paste", box_folder=box_annotation_folder),
                  thresholds_array, classes, train, batch_size, test_output, test_pred)

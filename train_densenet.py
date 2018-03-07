@@ -9,16 +9,16 @@ from keras.layers import Dense
 from nets.densenet import DenseNetImageNet169
 from datasets.tea_dataset import *
 
-#set_fraction_of_gpu_memory(0.85)
+#set_fraction_of_gpu_memory(0.8)
 #switch_to_cpu()
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 nb_classes = len(classes)
 
-input_shape = (224, 224, 3)
+input_shape = (300, 500, 3)
 
-model_name = "densenet_tea_fixed1"
+model_name = "densenet_tea_bw_paste"
 
 net_model = DenseNetImageNet169(input_shape=input_shape, include_top=False, weights='imagenet')
 # append classification layer
@@ -28,17 +28,17 @@ final_output = Dense(nb_classes, activation='sigmoid', name='fc11')(x)
 model = Model(inputs=net_model.input, outputs=final_output)
 model.summary()
 
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.compile(loss='binary_crossentropy', optimizer='adadelta', metrics=['accuracy'])
 
 # load other pre-trined weights
-model.load_weights('/data/kerasNets/models/densenet_tea_fixed.hdf5')
+model.load_weights('/data/kerasNets/models/densenet_tea_bw_paste.hdf5')
 
 # use for training specific layers
-#for layer in model.layers[:-1]:
-#	layer.trainable = False
+for layer in model.layers[:-9]:
+	layer.trainable = False
 
-batch_size = 30
-nb_epoch = 300
+batch_size = 5
+nb_epoch = 200
 
 train = read_sets_file(tr_imagesets_folder, "train")
 test = read_sets_file(ts_imagesets_folder, "test")
@@ -57,6 +57,7 @@ lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.2, cooldown=5, patie
 tensorboard = TensorBoard()
 
 #augmentation
+n_per_image = 5
 data_gen = ImageDataGenerator(
         featurewise_center=False,   # Set input mean to 0 over the dataset, feature-wise.
         samplewise_center=False,    # Set each sample mean to 0.
@@ -78,20 +79,18 @@ data_gen = ImageDataGenerator(
         preprocessing_function=None,  # function that will be implied on each input, before any other modification.
         data_format=K.image_data_format()   # One of {"channels_first", "channels_last"}. Default "channels_last".
     )
-n_per_image = 10
 
 # train
 model.fit_generator(
 		DataGenerator(img_folder=tr_image_folder, annot_folder=tr_annotation_folder, filenames=train, classes=classes,
 		              shuffle=True, input_shape=input_shape, batch_size=batch_size,
-                      data_gen=data_gen, n_per_image=n_per_image, category_repr=True),
+                      data_gen=data_gen, n_per_image=n_per_image, category_repr=True, mode='bw_paste', box_folder=box_annotation_folder),
 		steps_per_epoch=len(train)*n_per_image/batch_size,
 		epochs=nb_epoch,
 		validation_data=
 		DataGenerator(img_folder=ts_image_folder, annot_folder=ts_annotation_folder, filenames=test, classes=classes,
-					  input_shape=input_shape, batch_size=batch_size, category_repr=True),
+					  input_shape=input_shape, batch_size=batch_size, category_repr=True, mode='bw', box_folder=box_annotation_folder_ts),
 		validation_steps=len(test)/batch_size,
 		callbacks=[checkpointer, tensorboard, lr_reducer],
-		use_multiprocessing=True,
 		verbose=1
 )

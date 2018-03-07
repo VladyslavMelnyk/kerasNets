@@ -2,14 +2,18 @@ from __future__ import division
 
 import os
 import time
+import random
+import glob
 import cPickle as pickle
 
 import cv2
 import tensorflow as tf
 import numpy as np
 from xml.dom import minidom as xml
+import xml.etree.ElementTree as ET
 
 from keras.preprocessing.image import Iterator
+from keras.losses import binary_crossentropy
 import keras.backend.tensorflow_backend as K
 from keras.preprocessing.image import ImageDataGenerator
 from skimage.transform import rescale
@@ -108,6 +112,15 @@ def to_categorical(y, labels):
     return categorical
 
 
+def binary_loss(y_true, y_pred, labels):
+    y_p = to_categorical(y_pred, labels)
+    y_t = to_categorical(y_true, labels)
+    y_pred = tf.convert_to_tensor(y_p)
+    y_true = tf.convert_to_tensor(y_t)
+    loss = binary_crossentropy(y_true, y_pred)
+    return K.eval(loss)
+
+
 def read_sets_file(folder, filename):
     """
 	Read dataset's items from file
@@ -124,6 +137,149 @@ def read_sets_file(folder, filename):
         lines = f.read()
 
     return lines.split("\n")[:-1]
+
+
+def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
+    x, y = pos
+
+    y1, y2 = max(0, y), min(img.shape[0], y + img_overlay.shape[0])
+    x1, x2 = max(0, x), min(img.shape[1], x + img_overlay.shape[1])
+    y1o, y2o = max(0, -y), min(img_overlay.shape[0], img.shape[0] - y)
+    x1o, x2o = max(0, -x), min(img_overlay.shape[1], img.shape[1] - x)
+
+    if y1 >= y2 or x1 >= x2 or y1o >= y2o or x1o >= x2o:
+        return
+    channels = img.shape[2]
+    alpha = alpha_mask[y1o:y2o, x1o:x2o]
+    alpha_inv = 1.0 - alpha
+
+    for c in range(channels):
+        img[y1:y2, x1:x2, c] = (alpha * img_overlay[y1o:y2o, x1o:x2o, c] +
+                                alpha_inv * img[y1:y2, x1:x2, c])
+    return img
+
+
+def rotateImg(img, angle):
+    height, width = img.shape[:2]
+    image_center = (width / 2, height / 2)
+
+    rotation_mat = cv2.getRotationMatrix2D(image_center, angle, 1.)
+
+    abs_cos = abs(rotation_mat[0, 0])
+    abs_sin = abs(rotation_mat[0, 1])
+
+    bound_w = int(height * abs_sin + width * abs_cos)
+    bound_h = int(height * abs_cos + width * abs_sin)
+
+    rotation_mat[0, 2] += bound_w / 2 - image_center[0]
+    rotation_mat[1, 2] += bound_h / 2 - image_center[1]
+
+    rotated_mat = cv2.warpAffine(img, rotation_mat, (bound_w, bound_h))
+    return rotated_mat
+
+
+def get_correct_pos(X, Y, H, W, h, w, max_try=3e+3):
+    i=0
+    x = random.randint(0,W)
+    y = random.randint(0,H)
+    while True:
+        freeX = set(range(50, W-50)).symmetric_difference(X)
+        freeY = set(range(50, H-50)).symmetric_difference(Y)
+        freeX = freeX - freeX.intersection(X)
+        freeY = freeY - freeY.intersection(Y)
+        if set(range(x, x+w)).intersection(X) or x+w>=W-50 or \
+                y+h>=H-50 or set(range(y, y + h)).intersection(Y):
+            if len(freeY) > 0 and len(freeX) > 0:
+                x = random.sample(freeX, 1)[0]
+                y = random.sample(freeY, 1)[0]
+            else:
+                continue
+            i += 1
+        else:
+            break
+        if i==max_try:
+            return 0, 0, X, Y
+            break
+    X.extend(range(x, x+w))
+    Y.extend(range(y, y+h))
+    return x, y, X, Y
+
+
+def get_positions(annot_file):
+    tree = ET.parse(annot_file)
+    X = []
+    Y = []
+    for obj in tree.findall('object'):
+        if obj.find('deleted') == True and int(obj.find('deleted').text) == 1:
+            continue
+        else:
+            bbox = obj.find('bndbox')
+            if bbox.find('xmin').text.isdigit()==True:
+                x1 = int(bbox.find('xmin').text)
+            if bbox.find('ymin').text.isdigit()==True:
+                y1 = int(bbox.find('ymin').text)
+            if bbox.find('xmax').text.isdigit()==True:
+                x2 = int(bbox.find('xmax').text)
+            if bbox.find('ymax').text.isdigit()==True:
+                y2 = int(bbox.find('ymax').text)
+            X.extend(range(x1, x2))
+            Y.extend(range(y1, y2))
+    return X,Y
+
+def paste_obj_color(image_file, annot_file, input_shape, box_annots, max=7):
+    imgs_small = [glob.glob("/data/Tmp_datasets/tea_img/*.png")]
+    img = cv2.imread(image_file, cv2.IMREAD_IGNORE_ORIENTATION | cv2.IMREAD_COLOR)
+    annot_file = (os.path.join(box_annots, annot_file))
+    X, Y = get_positions(annot_file)
+    H, W = img.shape[:2]
+    random.shuffle(imgs_small[0])
+    for j in range(max):
+        img_small = cv2.imread(imgs_small[0][j], cv2.IMREAD_UNCHANGED)
+        img_small = rotateImg(img_small, random.randint(0, 90))
+        h, w = img_small.shape[:2]
+        x, y, X, Y = get_correct_pos(X, Y, H, W, h, w)
+        if x != 0:
+            img = overlay_image_alpha(img,
+                                      img_small[:, :, 0:3],
+                                      (x, y),
+                                      img_small[:, :, 3] / 255.0)
+        else:
+            pass
+
+    img = cv2.resize(img, dsize=(input_shape[1], input_shape[0]), interpolation=cv2.INTER_LINEAR)
+
+    return img
+
+
+def paste_obj_bw(image_file, annot_file, input_shape, box_annots, max=7, rescale=1. / 255):
+    imgs_small = [glob.glob("/data/Tmp_datasets/tea_img/*.png")]
+    img = cv2.imread(image_file, cv2.IMREAD_IGNORE_ORIENTATION | cv2.IMREAD_COLOR)
+    annot_file = (os.path.join(box_annots, annot_file))
+    X, Y = get_positions(annot_file)
+    H, W = img.shape[:2]
+    random.shuffle(imgs_small[0])
+    for j in range(max):
+        img_small = cv2.imread(imgs_small[0][j], cv2.IMREAD_UNCHANGED)
+        img_small = rotateImg(img_small, random.randint(0, 90))
+        h, w = img_small.shape[:2]
+        x, y, X, Y = get_correct_pos(X, Y, H, W, h, w)
+        if x != 0:
+            img = overlay_image_alpha(img,
+                                      img_small[:, :, 0:3],
+                                      (x, y),
+                                      img_small[:, :, 3] / 255.0)
+        else:
+            pass
+
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    out_img = np.zeros(img.shape)
+    out_img[:, :, 0] = img_gray
+    out_img[:, :, 1] = img_gray
+    out_img[:, :, 2] = img_gray
+    out_img = cv2.resize(out_img, (input_shape[1], input_shape[0]))
+    img = out_img * rescale
+
+    return img
 
 
 def update_metric(metric, threshold, labels):
@@ -235,6 +391,9 @@ def model_evaluation(model, data_generator, thresholds_array, classes, test_file
     if not os.path.exists(out_pickle):
         f = open(out_pred, "w+")
         avg_time_for_inference = 0
+        loss = []
+        loss1 = []
+        loss2 = []
         tp = dict(zip(thresholds_array, [dict(zip(classes, [0] * len(classes))) for i in range(len(thresholds_array))]))
         tn = dict(zip(thresholds_array, [dict(zip(classes, [0] * len(classes))) for i in range(len(thresholds_array))]))
         fp = dict(zip(thresholds_array, [dict(zip(classes, [0] * len(classes))) for i in range(len(thresholds_array))]))
@@ -291,6 +450,21 @@ def model_evaluation(model, data_generator, thresholds_array, classes, test_file
                 # 	if th > 0:
                 # 		f.write("Th: {0}\nTP: {1}\nFN: {2}\nFP: {3}\nTN: {4}\nGround truth: {5}\nAvg Prediction: {6}\nAll predictions {7}\nVariance {8}\n".
                 #             format(th, tp_set, fn_set, fp_set, tn_set, ground_truth, single_prediction, prd, var))
+                loss_mask = np.where(single_prediction > 0.1)[0]
+                loss_mask1 = np.where(single_prediction > 0.5)[0]
+                loss_mask2 = np.where(single_prediction > 0.7)[0]
+
+                preds = set(np.array(classes)[loss_mask])
+                l = binary_loss(ground_truth[it], preds, classes)
+                loss.extend(l)
+
+                preds = set(np.array(classes)[loss_mask1])
+                l1 = binary_loss(ground_truth[it], preds, classes)
+                loss1.extend(l1)
+
+                preds = set(np.array(classes)[loss_mask2])
+                l2 = binary_loss(ground_truth[it], preds, classes)
+                loss2.extend(l2)
 
         for th in thresholds_array:
             for cls in classes:
@@ -340,6 +514,9 @@ def model_evaluation(model, data_generator, thresholds_array, classes, test_file
     print '*' * 180
     print "{:>15}\t{}".format("Max accuracy", avg_p / len(classes))
     print '*' * 180
+    print "Average loss with threshold: 0.1 - {0:.3}".format(np.mean(loss))
+    print "Average loss with threshold: 0.5 - {0:.3}".format(np.mean(loss1))
+    print "Average loss with threshold: 0.7 - {0:.3}".format(np.mean(loss2))
     print "Average inference time for one image: {0}".format(avg_time_for_inference)
     k, v = dict_max_value(avg_acc)
     print "Accuracy with global threshold: {0:.3} - {1:.3}".format(k, v)
@@ -354,20 +531,20 @@ def model_evaluation(model, data_generator, thresholds_array, classes, test_file
 class DataGenerator(Iterator):
     def __init__(self, img_folder, annot_folder, filenames, classes,
                  input_shape=None, batch_size=64, shuffle=False, seed=None,
-                 data_gen=None, n_per_image=0, category_repr=True, prep="color"):
+                 data_gen=None, n_per_image=0, category_repr=True, mode="color", box_folder=None):
 
         self.img_folder = img_folder
         self.annot_folder = annot_folder
         self.filenames = filenames
         self.category_repr = category_repr
-
         self.input_shape = input_shape
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.classes = classes
         self.data_gen = data_gen
         self.n_per_image = n_per_image
-        self.prep = prep
+        self.mode = mode
+        self.box_folder = box_folder
         N = len(self.filenames)
 
         super(DataGenerator, self).__init__(N, batch_size, shuffle, seed)
@@ -377,19 +554,58 @@ class DataGenerator(Iterator):
             index_array, _, current_batch_size = next(self.index_generator)
 
         batch_x = np.zeros((max(current_batch_size, self.n_per_image),) + self.input_shape)
-        batch_y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
+        batch_y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) \
+            if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
         x = np.zeros((max(current_batch_size, self.n_per_image),) + self.input_shape)
-        y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
+        y = np.zeros((max(current_batch_size, self.n_per_image), len(self.classes))) \
+            if self.category_repr else [0] * max(current_batch_size, self.n_per_image)
 
         for i, j in enumerate(index_array):
-            if self.prep == 'color':
+            if self.mode == 'color':
                 im = process_image(
                     os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
                     self.input_shape)
-            else:
+            elif self.mode == 'bw':
                 im = preprocess_fc(
                     os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
                     self.input_shape)
+            elif self.mode == 'bw_color':
+                if (int(j % 5 != 0)):
+                    im = preprocess_fc(
+                        os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                        self.input_shape)
+                elif (int(j % 5 == 0)):
+                    im = process_image(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                       self.input_shape)
+            elif self.mode == 'bw_paste':
+                if (int(j % 5 != 0)):
+                    im = preprocess_fc(
+                        os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                        self.input_shape)
+                elif (int(j % 5 == 0)):
+                    im = paste_obj_bw(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                      self.filenames[int(j)] + ".xml", self.input_shape, self.box_folder)
+            elif self.mode == 'color_paste':
+                if (int(j % 5 != 0)):
+                    im = process_image(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                       self.input_shape)
+                elif (int(j % 5 == 0)):
+                    im = paste_obj_color(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                         self.filenames[int(j)] + ".xml", self.input_shape, self.box_folder)
+            elif self.mode == 'combined':
+                if (int(j % 8 != 0)) or (int(j % 5 != 0)) or (int(j % 9 != 0)):
+                    im = process_image(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                       self.input_shape)
+                elif (int(j % 8 == 0)):
+                    im = paste_obj_color(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                         self.filenames[int(j)] + ".xml", self.input_shape, self.box_folder)
+                elif (int(j % 5 == 0)):
+                    im = preprocess_fc(
+                        os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                        self.input_shape)
+                elif (int(j % 9 == 0)):
+                    im = paste_obj_bw(os.path.join(self.img_folder, self.filenames[int(j)] + ".jpg"),
+                                      self.filenames[int(j)] + ".xml", self.input_shape, self.box_folder)
             batch_x[i] = im
             labels = process_annotation(os.path.join(self.annot_folder, self.filenames[int(j)] + ".xml"))
             batch_y[i] = to_categorical(labels, self.classes) if self.category_repr else set(labels)
