@@ -4,10 +4,10 @@ import json
 from pycocotools import mask
 
 classes = classes_box
-annotFolder = box_annotation_folder
-imgFolder = tr_image_folder
-imgList = train
-json_path=os.path.abspath(os.path.join(annotFolder, "..", "coco.json"))
+annotFolder = box_annotation_folder_ts
+imgFolder = ts_image_folder
+imgList = validation_box
+json_path=os.path.abspath(os.path.join(annotFolder, "..", "tea_coco_test.json"))
 
 
 def convert_to_COCO(img_folder, annot_folder, img_list, json_path=json_path):
@@ -22,7 +22,7 @@ def convert_to_COCO(img_folder, annot_folder, img_list, json_path=json_path):
         imdata.extend(get_img_data(img_folder, file, i))
         annot_data.extend(get_annot_data(annot_folder, file, i))
     cat_data.extend(get_cat_data(classes))
-    print("Finished proccesing all files!")
+    print("Finished proccesing all {} files!".format(i))
     data = {"images":imdata, "type":"instances", "annotations":annot_data, "categories":cat_data}
     json_dump(data, json_path)
 
@@ -32,7 +32,7 @@ def get_img_data(img_folder, file, i):
     img = os.path.join(img_folder, file + ".jpg")
     img = cv2.imread(img, cv2.IMREAD_IGNORE_ORIENTATION | cv2.IMREAD_COLOR)
     height, width, channels = img.shape
-    return [{"filename":str(file+".jpg"), "height":height, "width":width, "id":i}]
+    return [{"file_name":str(file+".jpg"), "height":height, "width":width, "id":i}]
 
 def get_cat_data(classes):
     categories = []
@@ -52,17 +52,15 @@ def get_annot_data(annot_folder, file, i):
             get_annot_data.counter += 1
             bbox = obj.find('bndbox')
             cat_id = classes.index(obj.find('name').text.lower().strip()) + 1
-            if bbox.find('xmin').text.isdigit() == True:
+            if bbox.find('xmin').text.isdigit() == True and bbox.find('ymin').text.isdigit() == True and \
+                bbox.find('xmax').text.isdigit() == True and bbox.find('ymax').text.isdigit() == True:
                 x1 = int(bbox.find('xmin').text)
-            if bbox.find('ymin').text.isdigit() == True:
                 y1 = int(bbox.find('ymin').text)
-            if bbox.find('xmax').text.isdigit() == True:
                 x2 = int(bbox.find('xmax').text)
-            if bbox.find('ymax').text.isdigit() == True:
                 y2 = int(bbox.find('ymax').text)
-            box = [x1, y1, x2, y2]
-            labelMask = np.zeros((y2, x2))
-            labelMask[:, :] = y2 * x2
+            box = [x1, y1, x2-x1, y2-y1]
+            labelMask = np.zeros((box[3],box[2]))
+            labelMask[:, :] = box[3] * box[2]
             labelMask = np.expand_dims(labelMask, axis=2)
             labelMask = labelMask.astype('uint8')
             labelMask = np.asfortranarray(labelMask)

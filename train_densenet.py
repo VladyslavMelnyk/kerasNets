@@ -18,7 +18,7 @@ nb_classes = len(classes)
 
 input_shape = (300, 500, 3)
 
-model_name = "densenet_tea_bw_paste"
+model_name = "densenet_tea_color_new"
 
 net_model = DenseNetImageNet169(input_shape=input_shape, include_top=False, weights='imagenet')
 # append classification layer
@@ -31,13 +31,13 @@ model.summary()
 model.compile(loss='binary_crossentropy', optimizer='adadelta', metrics=['accuracy'])
 
 # load other pre-trined weights
-model.load_weights('/data/kerasNets/models/densenet_tea_bw_paste.hdf5')
+model.load_weights('/data/kerasNets/models/densenet_tea_color_new.hdf5')
 
 # use for training specific layers
-for layer in model.layers[:-9]:
+for layer in model.layers[:-2]:
 	layer.trainable = False
 
-batch_size = 5
+batch_size = 10
 nb_epoch = 200
 
 train = read_sets_file(tr_imagesets_folder, "train")
@@ -84,12 +84,12 @@ data_gen = ImageDataGenerator(
 model.fit_generator(
 		DataGenerator(img_folder=tr_image_folder, annot_folder=tr_annotation_folder, filenames=train, classes=classes,
 		              shuffle=True, input_shape=input_shape, batch_size=batch_size,
-                      data_gen=data_gen, n_per_image=n_per_image, category_repr=True, mode='bw_paste', box_folder=box_annotation_folder),
+                      data_gen=data_gen, n_per_image=n_per_image, category_repr=True, mode='color'),
 		steps_per_epoch=len(train)*n_per_image/batch_size,
 		epochs=nb_epoch,
 		validation_data=
 		DataGenerator(img_folder=ts_image_folder, annot_folder=ts_annotation_folder, filenames=test, classes=classes,
-					  input_shape=input_shape, batch_size=batch_size, category_repr=True, mode='bw', box_folder=box_annotation_folder_ts),
+					  input_shape=input_shape, batch_size=batch_size, category_repr=True, mode='color'),
 		validation_steps=len(test)/batch_size,
 		callbacks=[checkpointer, tensorboard, lr_reducer],
 		verbose=1

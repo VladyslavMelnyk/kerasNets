@@ -12,7 +12,7 @@ np.set_printoptions(precision=5, suppress=True)
 
 #switch_to_cpu()
 
-model_location = os.path.join("models", "densenet_tea_color_paste.hdf5")
+model_location = os.path.join("models", "densenet_tea_color_new.hdf5")
 # model_location = os.path.join("models", "dense_net_169_original_retrain.hdf5")
 # model2_location = os.path.join("models", "dense_net_169_original.hdf5")
 
@@ -26,7 +26,7 @@ batch_size = 1
 
 input_shape = (300, 500, 3)
 
-th_step = 0.25
+th_step = 0.05
 thresholds_array = np.arange(0, 1, th_step)
 
 val_output = os.path.join(out_dir, "results_val.p")
@@ -52,5 +52,5 @@ if os.path.exists(test_pred):
 model_evaluation(model,
                  DataGenerator(img_folder=tr_image_folder, annot_folder=tr_annotation_folder,
                                filenames=train, classes=classes, input_shape=input_shape, batch_size=batch_size,
-                               category_repr=False, mode="color_paste", box_folder=box_annotation_folder),
+                               category_repr=False, mode="color", box_folder=box_annotation_folder),
                  thresholds_array, classes, train, batch_size, test_output, test_pred)
